@@ -1,0 +1,71 @@
+kind: GCPBackendPolicy
+apiVersion: networking.gke.io/v1
+metadata:
+  name: gemma-server-policy
+  namespace: gemma-server
+spec:
+  targetRef:
+    group: net.gke.io
+    kind: ServiceImport
+    name: gemma-server-service
+  default:
+    timeoutSec: 100
+    scopes:
+    - selector:
+        gke.io/region: europe-west4
+      backendPreference: PREFERRED
+    maxRatePerEndpoint: 10
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: gemma-server-healthcheck
+  namespace: gemma-server
+spec:
+  default:
+    checkIntervalSec: 15
+    healthyThreshold: 10
+    unhealthyThreshold: 1
+    config:
+      httpHealthCheck:
+        port: 8000
+        portSpecification: USE_FIXED_PORT
+        requestPath: /health
+      type: HTTP
+  targetRef:
+    group: net.gke.io
+    kind: ServiceImport
+    name: gemma-server-service
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: gemma-server-gateway
+  namespace: gemma-server
+spec:
+  gatewayClassName: gke-l7-global-external-managed-mc
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - kind: HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: gemma-server-route
+  namespace: gemma-server
+  labels:
+    gateway: gemma-server-gateway
+spec:
+  parentRefs:
+  - kind: Gateway
+    name: gemma-server-gateway
+  rules:
+  - backendRefs:
+    - group: net.gke.io
+      kind: ServiceImport
+      name: gemma-server-service
+      port: 8000
